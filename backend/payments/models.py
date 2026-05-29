@@ -42,6 +42,15 @@ class Payment(models.Model):
     created_at     = models.DateTimeField(auto_now_add=True)
     updated_at     = models.DateTimeField(auto_now=True)
 
-
+    # Add this Meta class to your Payment model
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["booking", "payment_type"],
+                condition=models.Q(status="completed"),
+                name="unique_completed_payment_type_per_booking"
+            )
+        ]
+        
     def __str__(self):
         return f"{self.payment_type} | {self.booking} | {self.status}"

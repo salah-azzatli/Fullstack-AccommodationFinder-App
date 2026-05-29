@@ -200,7 +200,25 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# PAYMOB_API_KEY        = env("PAYMOB_API_KEY")        # from dashboard → Settings → API Key
-# PAYMOB_INTEGRATION_ID = env("PAYMOB_INTEGRATION_ID") # from Developers → Payment Integrations
-# PAYMOB_IFRAME_ID      = env("PAYMOB_IFRAME_ID")      # from Developers → iFrames
-# PAYMOB_HMAC_SECRET    = env("PAYMOB_HMAC_SECRET")    # from Settings → HMAC
+
+
+#─────Paymob──────────────────────────────────────────────────
+#Never hardcode secrets in settings.py. we Use a .env file
+from decouple import config
+
+PAYMOB_API_KEY        = config("PAYMOB_API_KEY")
+PAYMOB_INTEGRATION_ID = config("PAYMOB_INTEGRATION_ID", cast=int)
+PAYMOB_IFRAME_ID      = config("PAYMOB_IFRAME_ID", cast=int)
+PAYMOB_HMAC_SECRET    = config("PAYMOB_HMAC_SECRET")
+#─────End-Paymob──────────────────────────────────────────────────
+
+#─────Ngrok──────────────────────────────────────────────────
+
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'childhood-motto-debtor.ngrok-free.app',
+    'childhood-motto-debtor.ngrok-free.dev',
+]
+
+#─────End-Ngrok──────────────────────────────────────────────────

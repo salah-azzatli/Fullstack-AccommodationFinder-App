@@ -5,6 +5,7 @@ booking models
 """
 from django.utils import timezone
 from datetime import timedelta
+import builtins 
 
 from django.db import models
 from accounts.models import Users
@@ -60,3 +61,7 @@ class Booking(models.Model):
         if not self.pk and not self.expires_at:
             self.expires_at = timezone.now() + timedelta(minutes=30)
         super().save(*args, **kwargs)
+    
+    @builtins.property
+    def is_expired(self):
+        return self.status == "pending_payment" and timezone.now() > self.expires_at

@@ -15,6 +15,6 @@ urlpatterns = [
     path('community/'    , include('api.community_api.urls')),
     path('messaging/'    , include('api.messaging_api.urls')),
     path('notifications/', include('api.notifications_api.urls')),
-    # path('payments/'     , include('api.payments_api.urls')),
+    path('payments/'     , include('api.payments_api.urls')),
     path('services/'     , include('api.services_api.urls')),
 ]

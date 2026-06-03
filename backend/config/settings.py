@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'phonenumber_field',
     'corsheaders',
+    'channels',
     # (11) Local
     'accounts',
     'bookings',
@@ -222,3 +223,21 @@ ALLOWED_HOSTS = [
 ]
 
 #─────End-Ngrok──────────────────────────────────────────────────
+
+# ── use ASGI instead of WSGI ──────────────────────────────────
+ 
+ASGI_APPLICATION = "studenthub.asgi.application"
+# ──End use ASGI instead of WSGI ────────────────────────────────
+ 
+ 
+# ── Channel layer (Redis as message broker) ─────────────────────
+ 
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    }
+}
+ 

@@ -1,16 +1,38 @@
 """
-ASGI config for config project.
+ASGI entry point for StudentHub.
 
-It exposes the ASGI callable as a module-level variable named ``application``.
+Replaces the default wsgi.py as the server gateway when running with
+Daphne or Uvicorn. Routes incoming connections by protocol:
 
-For more information on this file, see
-https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
+    HTTP      → Django URL router → DRF views  (same as before)
+    WebSocket → JWTAuthMiddleware → ChatConsumer
+
+wsgi.py can stay in the project — it is still used by some deployment
+tools for the HTTP-only path.
 """
 
 import os
-
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
-application = get_asgi_application()
+# get_asgi_application() must be called before any models or consumers
+# are imported so Django's app registry is fully loaded first.
+django_asgi_app = get_asgi_application()
+
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import AllowedHostsOriginValidator
+from messaging.middleware import JWTAuthMiddleware
+from messaging.routing import websocket_urlpatterns
+
+application = ProtocolTypeRouter({
+    # All normal HTTP traffic goes through Django as usual
+    "http": django_asgi_app,
+
+    # WebSocket connections are authenticated first, then routed to consumers
+    "websocket": AllowedHostsOriginValidator(
+        JWTAuthMiddleware(
+            URLRouter(websocket_urlpatterns)
+        )
+    ),
+})

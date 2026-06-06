@@ -1,0 +1,211 @@
+{
+  "info": {
+    "name": "StudentHub — WebSocket 2-User Test",
+    "_postman_id": "studenthub-ws-test-v1",
+    "description": "Creates two users, logs them in, starts a conversation, then gives you the WebSocket URLs to test real-time messaging.\n\nRun order:\n1. Register User A\n2. Register User B\n3. Login User A → token + user_id auto-saved\n4. Login User B → token + user_id auto-saved\n5. User A starts conversation with User B\n6. Read the WebSocket Instructions request for the WS URLs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",         "value": "http://localhost:8000" },
+    { "key": "token_a",          "value": "" },
+    { "key": "token_b",          "value": "" },
+    { "key": "user_a_id",        "value": "" },
+    { "key": "user_b_id",        "value": "" },
+    { "key": "conversation_id",  "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Step 1 — Register User A",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "pm.test('User A registered', () => pm.expect(pm.response.json().username).to.equal('ws_user_a'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{base_url}}/api/auth/register/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "register", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"ws_user_a\",\n  \"email\": \"ws_user_a@test.com\",\n  \"password\": \"testpass123\",\n  \"role\": \"student\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Step 2 — Register User B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "pm.test('User B registered', () => pm.expect(pm.response.json().username).to.equal('ws_user_b'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{base_url}}/api/auth/register/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "register", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"ws_user_b\",\n  \"email\": \"ws_user_b@test.com\",\n  \"password\": \"testpass123\",\n  \"role\": \"student\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Step 3 — Login User A",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('token_a', json.access);",
+              "",
+              "// Decode JWT payload to extract user_id",
+              "// JWT = header.payload.signature — payload is base64 encoded",
+              "const payload = json.access.split('.')[1];",
+              "const decoded = JSON.parse(atob(payload));",
+              "pm.collectionVariables.set('user_a_id', decoded.user_id);",
+              "",
+              "pm.test('Got token A', () => pm.expect(json.access).to.be.a('string'));",
+              "pm.test('Got user_a_id', () => pm.expect(decoded.user_id).to.not.be.undefined);",
+              "console.log('User A ID:', decoded.user_id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{base_url}}/api/token/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "token", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"ws_user_a\",\n  \"password\": \"testpass123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Step 4 — Login User B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('token_b', json.access);",
+              "",
+              "// Decode JWT payload to extract user_id",
+              "const payload = json.access.split('.')[1];",
+              "const decoded = JSON.parse(atob(payload));",
+              "pm.collectionVariables.set('user_b_id', decoded.user_id);",
+              "",
+              "pm.test('Got token B', () => pm.expect(json.access).to.be.a('string'));",
+              "pm.test('Got user_b_id', () => pm.expect(decoded.user_id).to.not.be.undefined);",
+              "console.log('User B ID:', decoded.user_id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{base_url}}/api/token/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "token", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"ws_user_b\",\n  \"password\": \"testpass123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Step 5 — User A starts conversation with User B",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status 201', () => pm.response.to.have.status(201));",
+              "const json = pm.response.json();",
+              "pm.collectionVariables.set('conversation_id', json.id);",
+              "pm.test('Conversation created', () => pm.expect(json.id).to.be.a('number'));",
+              "",
+              "// Print ready-to-use WebSocket URLs to the console",
+              "const convId = json.id;",
+              "const tokenA = pm.collectionVariables.get('token_a');",
+              "const tokenB = pm.collectionVariables.get('token_b');",
+              "const base   = 'ws://localhost:8000/ws/chat';",
+              "console.log('═══════════════════════════════════════════════');",
+              "console.log('✅ Conversation ID:', convId);",
+              "console.log('═══════════════════════════════════════════════');",
+              "console.log('🔵 User A — paste this in WebSocket tab 1:');",
+              "console.log(`${base}/${convId}/?token=${tokenA}`);",
+              "console.log('───────────────────────────────────────────────');",
+              "console.log('🟢 User B — paste this in WebSocket tab 2:');",
+              "console.log(`${base}/${convId}/?token=${tokenB}`);",
+              "console.log('═══════════════════════════════════════════════');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token_a}}" },
+          { "key": "Content-Type",  "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/messaging/",
+          "host": ["{{base_url}}"],
+          "path": ["api", "messaging", ""]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"receiver_id\": {{user_b_id}},\n  \"message\": \"Hey! Can you receive this in real time?\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Step 6 — WebSocket Instructions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/messaging/",
+          "host": ["{{base_url}}"]
+        },
+        "description": "After running steps 1-5:\n\n1. Open Postman Console (View → Console)\n2. Copy the two WebSocket URLs printed there\n\n──────────────────────────────────────────\nHOW TO TEST REAL-TIME:\n──────────────────────────────────────────\n\n1. Postman → New → WebSocket Request\n   Paste User A URL → Connect\n\n2. Postman → New → WebSocket Request\n   Paste User B URL → Connect\n\n3. In User A tab send:\n   {\"body\": \"Hello from User A!\"}\n\n4. BOTH tabs receive instantly:\n   {\n     \"type\": \"chat_message\",\n     \"body\": \"Hello from User A!\",\n     \"sender_id\": ...,\n     \"sender_name\": \"ws_user_a\",\n     \"created_at\": \"...\"\n   }\n\n5. In User B tab send:\n   {\"body\": \"Hello back from User B!\"}\n\n6. BOTH tabs receive User B's message.\n\n──────────────────────────────────────────\nTROUBLESHOOTING:\n403 → remove AllowedHostsOriginValidator from asgi.py\nDisconnects immediately → token expired, re-run steps 3+4\nRedis timeout → run: pip install redis==5.2.1\n──────────────────────────────────────────"
+      }
+    }
+  ]
+}

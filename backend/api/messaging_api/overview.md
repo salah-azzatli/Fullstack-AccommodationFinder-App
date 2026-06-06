@@ -5,16 +5,15 @@
 
 ```
 from django.urls import path
-from api.messaging_api.views import (
+from .views import (
     ConversationView,
-    MessageListView,
+    MessageView,
 )
 
 urlpatterns = [
     path("",                       ConversationView.as_view(),  name="conversations"),
-    path("<int:conversation_id>/", MessageListView.as_view(),   name="messages"),
-]
-        
+    path("<int:conversation_id>/", MessageView.as_view(),   name="messages"),
+]     
 ```
 
 # ────────────────────────End URL───────────────────────────────────────
@@ -24,6 +23,8 @@ urlpatterns = [
 # ────────────────────────Start Serializer──────────────────────────────
 
 ```
+
+
 
 
 from rest_framework import serializers
@@ -95,6 +96,8 @@ class StartConversationSerializer(serializers.Serializer):
 # ────────────────────────Start View────────────────────────────────────
 
 ```
+
+
 
 
 from django.db.models import Q
@@ -170,7 +173,7 @@ class ConversationView(APIView):
 
 #────────────────────────────────────────────────────────────────────────────────────────────
 
-class MessageListView(APIView):
+class MessageView(APIView):
     """
     GET /api/messages/<id>/ — load conversation history + mark messages read.
     """
@@ -194,6 +197,7 @@ class MessageListView(APIView):
 
 
     
+    
 ```
 
 # ────────────────────────End View──────────────────────────────────────
@@ -209,62 +213,6 @@ class MessageListView(APIView):
 ```
 
 
-from django.db import models
-
-from accounts.models import Users
-from bookings.models import Booking
-from properties.models import Property
-
-
-
-class Conversation(models.Model):
-    """
-    A conversation between two users.
-    Can be standalone (DM) or linked to a booking/property.
-
-    booking=None  → standalone DM
-    booking=<id>  → linked to a specific booking (tenant ↔ landlord)
-    """
-    initiator = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="initiated_conversations")
-    receiver  = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="received_conversations")
-
-    booking  = models.ForeignKey(Booking,  on_delete=models.SET_NULL, null=True, blank=True, related_name="conversations")
-    property = models.ForeignKey(Property, on_delete=models.SET_NULL, null=True, blank=True, related_name="conversations")
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-updated_at"]
-        constraints = [
-            # Prevent duplicate conversations for the same pair + booking
-            models.UniqueConstraint(
-                fields=["initiator", "receiver", "booking"],
-                name="unique_conversation_per_booking",
-            )
-        ]
-
-    def __str__(self):
-        return f"{self.initiator.username} ↔ {self.receiver.username} ({self.booking or 'DM'})"
-    
- 
-#─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-
-class Message(models.Model):
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
-    sender       = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="sent_messages")
-
-    body    = models.TextField()
-    is_read = models.BooleanField(default=False)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["created_at"]
-
-    def __str__(self):
-        return f"{self.sender.username}: {self.body[:40]}"
 
 from django.db import models
 
@@ -322,6 +270,7 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.sender.username}: {self.body[:40]}"
+
 ```
 
 # ────────────────────────End Model──────────────────────────────────────

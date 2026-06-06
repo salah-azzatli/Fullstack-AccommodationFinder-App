@@ -73,7 +73,7 @@ class ConversationView(APIView):
 
 #────────────────────────────────────────────────────────────────────────────────────────────
 
-class MessageListView(APIView):
+class MessageView(APIView):
     """
     GET /api/messages/<id>/ — load conversation history + mark messages read.
     """

@@ -1,5 +1,5 @@
 from django.urls import path
-from api.messaging_api.views import (
+from .views import (
     ConversationView,
     MessageView,
 )

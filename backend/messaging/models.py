@@ -1,97 +1,58 @@
-"""
-Messaging app models.
-Handles direct messages between two users and group chat inside community groups.
 
-Models:
-    - Conversation → a thread between 2 users (DM) or linked to a Group (group chat)
-    - Message      → a single message inside a Conversation
-"""
 
 from django.db import models
-from django.conf import settings
+
+from accounts.models import Users
+from bookings.models import Booking
+from properties.models import Property
+
 
 
 class Conversation(models.Model):
     """
-    A conversation thread.
-    - DM:         is_group=False, participants has 2 users, group is NULL
-    - Group chat: is_group=True,  participants mirrors group members, group is set
+    A conversation between two users.
+    Can be standalone (DM) or linked to a booking/property.
+
+    booking=None  → standalone DM
+    booking=<id>  → linked to a specific booking (tenant ↔ landlord)
     """
+    initiator = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="initiated_conversations")
+    receiver  = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="received_conversations")
 
-    # ── Type ─────────────────────────────────────────────────────────────────
-    is_group = models.BooleanField(default=False)
+    booking  = models.ForeignKey(Booking,  on_delete=models.SET_NULL, null=True, blank=True, related_name="conversations")
+    property = models.ForeignKey(Property, on_delete=models.SET_NULL, null=True, blank=True, related_name="conversations")
 
-    # ── Participants ──────────────────────────────────────────────────────────
-    # For DMs:         exactly 2 users
-    # For group chats: kept in sync with GroupMembership via signals (future)
-    participants = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        related_name="conversations",
-        blank=True,
-    )
-
-    # ── Group link (group chats only) ─────────────────────────────────────────
-    # NULL for DMs.  One-to-one: each Group has at most one Conversation.
-    group = models.OneToOneField(
-        "community.Group",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="conversation",
-    )
-
-    # ── Timestamps ────────────────────────────────────────────────────────────
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)   # bumped on every new message
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-updated_at"]
+        constraints = [
+            # Prevent duplicate conversations for the same pair + booking
+            models.UniqueConstraint(
+                fields=["initiator", "receiver", "booking"],
+                name="unique_conversation_per_booking",
+            )
+        ]
 
     def __str__(self):
-        if self.is_group and self.group:
-            return f"GroupChat: {self.group.name}"
-        ids = list(self.participants.values_list("id", flat=True))
-        return f"DM({ids})"
-
+        return f"{self.initiator.username} ↔ {self.receiver.username} ({self.booking or 'DM'})"
+    
+ 
+#─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 class Message(models.Model):
-    """
-    A single message inside a Conversation.
-    Soft-delete via is_deleted — content replaced with placeholder, never hard-removed.
-    """
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name="messages")
+    sender       = models.ForeignKey(Users, on_delete=models.CASCADE, related_name="sent_messages")
 
-    # ── Relationships ─────────────────────────────────────────────────────────
-    conversation = models.ForeignKey(
-        Conversation,
-        on_delete=models.CASCADE,
-        related_name="messages",
-    )
-    sender = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="sent_messages",
-    )
+    body    = models.TextField()
+    is_read = models.BooleanField(default=False)
 
-    # ── Content ───────────────────────────────────────────────────────────────
-    body       = models.TextField()
-    is_deleted = models.BooleanField(default=False)  # soft-delete
-
-    # ── Read tracking ─────────────────────────────────────────────────────────
-    # Many-to-many so each participant can independently mark a message as read
-    read_by = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        related_name="read_messages",
-        blank=True,
-    )
-
-    # ── Timestamps ────────────────────────────────────────────────────────────
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["created_at"]
 
     def __str__(self):
-        sender_name = self.sender.username if self.sender else "deleted"
-        preview     = self.body[:40] if not self.is_deleted else "[deleted]"
-        return f"{sender_name}: {preview}"
+        return f"{self.sender.username}: {self.body[:40]}"

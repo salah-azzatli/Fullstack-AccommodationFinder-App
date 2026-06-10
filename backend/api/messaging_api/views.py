@@ -1,160 +1,99 @@
-"""
-Messaging API views.
 
-Views:
-    - ConversationListView   → GET  /api/messages/            ← inbox
-    - ConversationDetailView → GET  /api/messages/<id>/       ← open thread + mark read
-    - SendMessageView        → POST /api/messages/<id>/       ← send a message
-    - StartConversationView  → POST /api/messages/start/      ← open or retrieve a DM
-"""
 
+from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import status
 
 from messaging.models import Conversation, Message
+from accounts.models import Users
+from bookings.models import Booking
 from api.messaging_api.serializers import (
-    ConversationListSerializer,
-    ConversationDetailSerializer,
-    StartConversationSerializer,
-    SendMessageSerializer,
+    ConversationSerializer,
     MessageSerializer,
+    StartConversationSerializer,
 )
 
 
-class ConversationListView(APIView):
+
+class ConversationView(APIView):
     """
-    GET /api/messages/
-    Returns every conversation the requesting user is a participant of,
-    ordered by most recently updated (newest message first).
-    Includes unread count per conversation so the inbox badge is instant.
+    GET  /api/messages/  → list all my conversations
+    POST /api/messages/  → start a new conversation (or return existing one)
+ 
+    Both methods live on the same view so they share one URL cleanly.
+    Django routes to get() or post() based on the HTTP method.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        conversations = (
-            Conversation.objects
-            .filter(participants=request.user)
-            .prefetch_related("participants", "messages", "messages__read_by", "messages__sender")
-            .select_related("group")
+        conversations = Conversation.objects.filter(
+            Q(initiator=request.user) | Q(receiver=request.user)
+        ).prefetch_related("messages")
+        serializer = ConversationSerializer(conversations, many=True, context={"request": request})
+        return Response(serializer.data)
+    
+    def post(self, request):
+        serializer = StartConversationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        receiver_id = serializer.validated_data.get("receiver_id")
+        receiver    = Users.objects.get(id=receiver_id)
+        booking_id  = serializer.validated_data.get("booking_id")
+        booking     = Booking.objects.get(id=booking_id) if booking_id else None
+
+         # Return existing conversation if one already exists for this pai
+        conv = Conversation.objects.filter(
+            Q(initiator=request.user, receiver=receiver) |
+            Q(initiator=receiver,     receiver=request.user),
+            booking=booking
+        ).first()
+
+        if not conv:
+            conv = Conversation.objects.create(
+                initiator=request.user,
+                receiver=receiver,
+                booking=booking,
+                property=booking.property if booking else None,
+            )
+
+        # Create first message
+        Message.objects.create(
+            conversation=conv,
+            sender=request.user,
+            body=serializer.validated_data.get("message"),
         )
-        serializer = ConversationListSerializer(
-            conversations,
-            many=True,
-            context={"request": request},
+
+        return Response(
+            ConversationSerializer(conv, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
         )
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class ConversationDetailView(APIView):
+#────────────────────────────────────────────────────────────────────────────────────────────
+
+class MessageView(APIView):
     """
-    GET /api/messages/<id>/
-    Opens a conversation thread and marks all unread messages as read.
-    Only participants may access the thread (403 otherwise).
+    GET /api/messages/<id>/ — load conversation history + mark messages read.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, conversation_id):
         try:
-            conversation = (
-                Conversation.objects
-                .prefetch_related(
-                    "participants",
-                    "messages",
-                    "messages__sender",
-                    "messages__read_by",
-                )
-                .select_related("group")
-                .get(id=conversation_id)
+            conv = Conversation.objects.get(
+                Q(initiator=request.user) | Q(receiver=request.user),
+                id=conversation_id,
             )
         except Conversation.DoesNotExist:
             return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Only participants can read the thread
-        if not conversation.participants.filter(id=request.user.id).exists():
-            return Response({"error": "You are not a participant of this conversation."}, status=status.HTTP_403_FORBIDDEN)
+        # Mark all messages from the other person as read
+        conv.messages.exclude(sender=request.user).update(is_read=True)
 
-        # Mark all messages the user hasn't read yet as read (bulk, single query)
-        unread_ids = (
-            conversation.messages
-            .exclude(read_by=request.user)
-            .exclude(sender=request.user)
-            .values_list("id", flat=True)
-        )
-        for msg in Message.objects.filter(id__in=unread_ids):
-            msg.read_by.add(request.user)
-
-        serializer = ConversationDetailSerializer(
-            conversation,
-            context={"request": request},
-        )
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        messages   = conv.messages.select_related("sender")
+        serializer = MessageSerializer(messages, many=True)
+        return Response(serializer.data)
 
 
-class SendMessageView(APIView):
-    """
-    POST /api/messages/<id>/
-    Send a new message into an existing conversation.
-    Only participants can send (403 otherwise).
-    Bumps conversation.updated_at so the inbox re-sorts correctly.
-
-    Body: { "body": "..." }
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, conversation_id):
-        try:
-            conversation = Conversation.objects.get(id=conversation_id)
-        except Conversation.DoesNotExist:
-            return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Only participants can post into the thread
-        if not conversation.participants.filter(id=request.user.id).exists():
-            return Response({"error": "You are not a participant of this conversation."}, status=status.HTTP_403_FORBIDDEN)
-
-        serializer = SendMessageSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        message = serializer.save(sender=request.user, conversation=conversation)
-
-        # Auto-mark as read by the sender
-        message.read_by.add(request.user)
-
-        # Bump updated_at on conversation so inbox ordering updates
-        conversation.save(update_fields=["updated_at"])
-
-        return Response(
-            MessageSerializer(message, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class StartConversationView(APIView):
-    """
-    POST /api/messages/start/
-    Opens a DM with another user.
-    - If a DM already exists between the two users, returns it (no duplicate created).
-    - Returns 201 on new creation, 200 on existing thread.
-
-    Body: { "user_id": <int> }
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        serializer = StartConversationSerializer(
-            data=request.data,
-            context={"request": request},
-        )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        conversation, created = serializer.get_or_create_conversation()
-
-        response_serializer = ConversationDetailSerializer(
-            conversation,
-            context={"request": request},
-        )
-        http_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-        return Response(response_serializer.data, status=http_status)
+    

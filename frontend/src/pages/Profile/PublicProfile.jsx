@@ -1,14 +1,10 @@
-import React from "react";
-import Navbar from "../../assets/components/Navbar/Navbar.jsx";
-import {
-  MessageSquare,
-  UserPlus,
-  ShieldCheck,
-  MapPin,
-  Zap,
-  Mail,
-  Star
-} from "lucide-react";
+import React from 'react';
+import Navbar from "../../assets/components/Navbar/navbar.jsx"; 
+import { 
+  MapPin, School, Calendar, CheckCircle, Share2, 
+  Shield, Quote, FileText, GraduationCap, User, Star, 
+  Globe, Linkedin, Github, Award, MessageCircle, UserPlus, Heart, Check
+} from 'lucide-react';
 
 const userData = {
   name: "Mathew Perry",

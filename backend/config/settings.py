@@ -239,4 +239,6 @@ CHANNEL_LAYERS = {
         },
     }
 }
- 
+
+
+GOOGLE_MAPS_API_KEY = config("GOOGLE_MAPS_API_KEY") 
